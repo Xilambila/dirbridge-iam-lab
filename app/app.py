@@ -1,41 +1,68 @@
-from flask import Flask, request, render_template_string
+"""Local-only identity request preview. No directory operations or credentials."""
+
+import re
+import unicodedata
+
+from flask import Flask, render_template, request
 
 app = Flask(__name__)
+app.config.update(
+    MAX_CONTENT_LENGTH=4096,
+    MAX_FORM_MEMORY_SIZE=4096,
+    MAX_FORM_PARTS=8,
+    TRUSTED_HOSTS=["localhost", "127.0.0.1", "[::1]"],
+)
 
-HTML_FORM = '''
-    <h2>Formulário de Criação de Usuário</h2>
-    <form method="post">
-        ID Colaborador: <input name="id_colaborador"><br><br>
-        Nome: <input name="nome"><br><br>
-        Sobrenome: <input name="sobrenome"><br><br>
-        Criar email? <input type="checkbox" name="criar_email"><br><br>
-        <input type="submit" value="Criar Usuário">
-    </form>
-'''
 
-@app.route('/', methods=['GET', 'POST'])
+@app.after_request
+def security_headers(response):
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def valid_name(value):
+    return (
+        1 <= len(value) <= 80
+        and any(char.isalpha() for char in value)
+        and all(char.isalpha() or char in " '-" for char in value)
+    )
+
+
+def username_part(value):
+    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]", "", ascii_value.lower())
+
+
+@app.route("/", methods=["GET", "POST"])
 def criar_usuario():
-    if request.method == 'POST':
-        nome = request.form['nome']
-        sobrenome = request.form['sobrenome']
-        id_colab = request.form['id_colaborador']
-        criar_email = 'criar_email' in request.form
+    if request.method == "GET":
+        return render_template("index.html")
 
-        nome_usuario = f"{nome.lower()}.{sobrenome.lower()}"
-        email = f"{nome_usuario}@dominioprincipal.com.br"
-        senha = f"{nome[0]}{sobrenome[0]}{id_colab}"
+    first = request.form.get("nome", "").strip()
+    last = request.form.get("sobrenome", "").strip()
+    employee_id = request.form.get("id_colaborador", "").strip()
+    first_part, last_part = username_part(first), username_part(last)
+    if (
+        not valid_name(first)
+        or not valid_name(last)
+        or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", employee_id)
+        or not first_part
+        or not last_part
+    ):
+        return render_template("index.html", error="Enter valid demo names and an ID."), 400
 
-        return f"""
-            <h3>Usuário Processado:</h3>
-            Nome: {nome} {sobrenome}<br>
-            ID: {id_colab}<br>
-            Nome de Usuário: {nome_usuario}<br>
-            Email: {email if criar_email else "NÃO CRIAR"}<br>
-            Senha: {senha}<br>
-            <hr>
-            <code>Powershell script gerado aqui futuramente</code>
-            <br><br>
-            <a href="/">← Voltar</a>
-        """
-
-    return render_template_string(HTML_FORM)
+    username = f"{first_part}.{last_part}"
+    return render_template(
+        "preview.html",
+        first=first,
+        last=last,
+        employee_id=employee_id,
+        username=username,
+        email=f"{username}@example.invalid" if "criar_email" in request.form else None,
+    )

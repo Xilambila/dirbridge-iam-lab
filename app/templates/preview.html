@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Identity request preview</title>
+<h1>Identity request preview</h1>
+<p>No account has been created. This application does not connect to a directory.</p>
+<dl>
+  <dt>Name</dt><dd>{{ first }} {{ last }}</dd>
+  <dt>Demo employee ID</dt><dd>{{ employee_id }}</dd>
+  <dt>Proposed username</dt><dd>{{ username }}</dd>
+  <dt>Proposed email</dt><dd>{{ email or 'Not requested' }}</dd>
+</dl>
+<p>Username collision detection and identity verification are not implemented.</p>
+<a href="/">Back</a>
+</html>
